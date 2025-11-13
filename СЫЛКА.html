@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Геолокация — проект</title>
+
+  <!-- связка на внешний CSS -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Leaflet CSS (карта) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-sA+e2hM0H9QpX1E3r9Q6e8A6Zp0p+2Q5nY1fP3r2k/4="
+        crossorigin=""/>
+</head>
+<body>
+  <main class="card">
+    <section class="left">
+      <h1>Школьный проект: Геолокация</h1>
+      <p class="lead">Нажми кнопку — браузер запросит разрешение. Работает по HTTPS или на localhost.</p>
+
+      <div class="controls">
+        <button id="btnGet">Получить местоположение</button>
+        <button id="btnWatch" class="ghost">Начать наблюдение</button>
+        <button id="btnStop" class="ghost" disabled>Остановить наблюдение</button>
+      </div>
+
+      <div id="result">Нажмите «Получить местоположение».</div>
+      <p class="note">Для демонстрации на iPhone открой страницу по HTTPS (GitHub Pages или ngrok).</p>
+    </section>
+
+    <aside class="right">
+      <div id="map"></div>
+    </aside>
+  </main>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-o9N1j8k3bG+3x54k8fJ7Q8QZH2fQG3kK8k2F5k0b1hA="
+          crossorigin=""></script>
+
+  <script>
+    const btnGet = document.getElementById('btnGet');
+    const btnWatch = document.getElementById('btnWatch');
+    const btnStop = document.getElementById('btnStop');
+    const result = document.getElementById('result');
+
+    let watchId = null;
+    let map, marker, circle;
+
+    function initMap(){
+      map = L.map('map').setView([55.76, 37.64], 5); // по умолчанию центр
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+    }
+    initMap();
+
+    function showOnMap(lat, lon, acc){
+      const latLng = [lat, lon];
+      if (!marker) marker = L.marker(latLng).addTo(map);
+      else marker.setLatLng(latLng);
+
+      if (!circle) circle = L.circle(latLng, { radius: acc >= 0 ? acc : 50, color:'#2563eb', opacity:0.25 }).addTo(map);
+      else { circle.setLatLng(latLng); circle.setRadius(acc >= 0 ? acc : 50); }
+
+      map.setView(latLng, 15, { animate: true });
+    }
+
+    function format(pos){
+      const c = pos.coords;
+      return `Координаты:\nШирота: ${c.latitude}\nДолгота: ${c.longitude}\nТочность: ±${Math.round(c.accuracy)} м\nВремя: ${new Date(pos.timestamp).toLocaleString()}`;
+    }
+
+    btnGet.addEventListener('click', () => {
+      if (!navigator.geolocation) { result.textContent = 'Geolocation не поддерживается.'; return; }
+      result.textContent = 'Запрашиваем местоположение...';
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          result.textContent = format(pos);
+          showOnMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+        },
+        err => { result.textContent = `Ошибка: ${err.message} (код ${err.code})`; },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    });
+
+    btnWatch.addEventListener('click', () => {
+      if (!navigator.geolocation) { result.textContent = 'Geolocation не поддерживается.'; return; }
+      if (watchId !== null) { result.textContent = 'Наблюдение уже запущено.'; return; }
+      result.textContent = 'Запуск наблюдения...';
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          result.textContent = '[Обновление]\n' + format(pos);
+          showOnMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+          btnStop.disabled = false;
+        },
+        err => { result.textContent = `Ошибка наблюдения: ${err.message}`; },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
+      );
+      btnWatch.disabled = true;
+    });
+
+    btnStop.addEventListener('click', () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        result.textContent = 'Наблюдение остановлено.';
+        btnStop.disabled = true;
+        btnWatch.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
