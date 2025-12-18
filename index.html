@@ -5,31 +5,97 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Геолокация</title>
 
-  <link rel="stylesheet" href="re.css">
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        crossorigin="" />
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      height: 100vh;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* Карточка как в 2GIS */
+    .panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 360px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      padding: 20px;
+      z-index: 1000;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 22px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+    }
+
+    button.ghost {
+      background: #f1f5f9;
+      color: #111;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #result {
+      font-size: 13px;
+      white-space: pre-line;
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-  <main class="card">
-    <section class="left">
-      <h1>📍 Геолокация </h1>
-      <p class="lead">/</p>
 
-      <div class="controls">
-        <button id="btnGet">Получить местоположение</button>
-        <button id="btnWatch" class="ghost">Начать наблюдение</button>
-        <button id="btnStop" class="ghost" disabled>Остановить</button>
-      </div>
+  <div id="map"></div>
 
-      <div id="result">Нажмите кнопку выше.</div>
-      <p class="note">.</p>
-    </section>
+  <div class="panel">
+    <h1>📍 Геолокация</h1>
 
-    <aside class="right">
-      <div id="map"></div>
-    </aside>
-  </main>
+    <div class="controls">
+      <button id="btnGet">Найти</button>
+      <button id="btnWatch" class="ghost">Следить</button>
+      <button id="btnStop" class="ghost" disabled>Стоп</button>
+    </div>
+
+    <div id="result">Нажмите «Найти»</div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
@@ -42,75 +108,72 @@
     let watchId = null;
     let map, marker, circle;
 
-    function initMap() {
-      map = L.map('map').setView([55.76, 37.64], 5);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      }).addTo(map);
-    }
-    initMap();
+    // Инициализация карты (похожа на 2GIS)
+    map = L.map('map').setView([55.76, 37.64], 12);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20
+    }).addTo(map);
 
     function showOnMap(lat, lon, acc) {
       const point = [lat, lon];
-      if (!marker) marker = L.marker(point).addTo(map);
-      else marker.setLatLng(point);
 
-      if (!circle) circle = L.circle(point, { radius: acc, color: "#2563eb", opacity: 0.3 }).addTo(map);
-      else {
+      if (!marker) {
+        marker = L.marker(point).addTo(map);
+      } else {
+        marker.setLatLng(point);
+      }
+
+      if (!circle) {
+        circle = L.circle(point, {
+          radius: acc,
+          color: '#2563eb',
+          fillOpacity: 0.15
+        }).addTo(map);
+      } else {
         circle.setLatLng(point);
         circle.setRadius(acc);
       }
 
-      map.setView(point, 15);
+      map.setView(point, 17);
     }
 
     function format(pos) {
       const c = pos.coords;
-      return `📌 Координаты:
-Широта: ${c.latitude}
-Долгота: ${c.longitude}
-Точность: ±${Math.round(c.accuracy)} м
-Время: ${new Date(pos.timestamp).toLocaleString()}`;
+      return `Широта: ${c.latitude.toFixed(6)}
+Долгота: ${c.longitude.toFixed(6)}
+Точность: ±${Math.round(c.accuracy)} м`;
     }
 
-    btnGet.addEventListener("click", () => {
-      if (!navigator.geolocation) return result.textContent = "Геолокация не поддерживается.";
-
-      result.textContent = "⏳ Запрашиваем...";
+    btnGet.onclick = () => {
+      result.textContent = "Определяем...";
       navigator.geolocation.getCurrentPosition(
         pos => {
           result.textContent = format(pos);
           showOnMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
         },
-        err => result.textContent = `Ошибка: ${err.message}`,
-        { enableHighAccuracy: true, timeout: 15000 }
-      );
-    });
-
-    btnWatch.addEventListener("click", () => {
-      if (watchId !== null) return;
-
-      result.textContent = "▶ Начинаем наблюдение...";
-      watchId = navigator.geolocation.watchPosition(
-        pos => {
-          result.textContent = "🔄 Обновлено:\n" + format(pos);
-          showOnMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-          btnStop.disabled = false;
-        },
-        err => result.textContent = `Ошибка наблюдения: ${err.message}`,
+        err => result.textContent = "Ошибка: " + err.message,
         { enableHighAccuracy: true }
       );
+    };
 
+    btnWatch.onclick = () => {
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          result.textContent = format(pos);
+          showOnMap(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+        }
+      );
       btnWatch.disabled = true;
-    });
+      btnStop.disabled = false;
+    };
 
-    btnStop.addEventListener("click", () => {
+    btnStop.onclick = () => {
       navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      result.textContent = "⛔ Наблюдение остановлено.";
       btnWatch.disabled = false;
       btnStop.disabled = true;
-    });
+      result.textContent = "Наблюдение остановлено";
+    };
   </script>
 </body>
 </html>
